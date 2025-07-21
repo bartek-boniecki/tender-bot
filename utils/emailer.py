@@ -1,13 +1,8 @@
 import os
-import smtplib
-from email.mime.text import MIMEText
 from supabase import create_client
-
-SMTP_SERVER = os.getenv("SMTP_SERVER")
-SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
-SMTP_USERNAME = os.getenv("SMTP_USERNAME")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
-FROM_EMAIL = os.getenv("FROM_EMAIL", SMTP_USERNAME)
+import sib_api_v3_sdk
+from sib_api_v3_sdk.rest import ApiException
+import re
 
 def get_supabase_client():
     url = os.getenv("SUPABASE_URL")
@@ -26,26 +21,57 @@ def get_user_first_name(email):
         print(f"Error fetching first name: {e}")
         return ""
 
-def send_tender_email(user_email, tenders):
-    first_name = get_user_first_name(user_email)
-    if first_name:
-        greeting = f"Hi {first_name},"
-    else:
-        greeting = "Hello,"
-    subject = "Your Tender Participation Requirements Digest"
-    body = f"{greeting}\n\nHere are your latest tenders:\n\n"
+def summary_to_html(summary):
+    # Replace markdown-style **bold** with real <b>
+    html = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', summary)
+    # Replace lines starting with - (dash+space) to <li>
+    html = re.sub(r'^\s*-\s+', r'<li>', html, flags=re.MULTILINE)
+    # Wrap bullet points in <ul>
+    if '<li>' in html:
+        html = re.sub(r'(<li>.*?)(?=\n[^-]|$)', r'<ul>\1</ul>', html, flags=re.DOTALL)
+    # Replace line breaks with <br> for spacing
+    html = html.replace('\n', '<br>')
+    return html
+
+def build_tenders_html(tenders):
+    html = ""
     for tender in tenders:
-        body += f"{tender['url']}\n{tender['summary']}\n\n"
-    msg = MIMEText(body)
-    msg["Subject"] = subject
-    msg["From"] = FROM_EMAIL
-    msg["To"] = user_email
+        summary = tender.get('summary', '')
+        html += summary_to_html(summary)
+        # Add a link at the end (always clickable)
+        if tender.get('url'):
+            html += f'<br><a href="{tender["url"]}" style="color:#1a3767;text-decoration:underline;">Tender link</a><br><br>'
+    # Wrap everything in a styled <div>
+    return (
+        "<div style='font-family:Segoe UI,Arial,sans-serif;font-size:16px;line-height:1.7;color:#212121;'>"
+        f"{html}"
+        "</div>"
+    )
+
+def send_tender_email(user_email, tenders):
+    # Use Brevo API to send email
+    configuration = sib_api_v3_sdk.Configuration()
+    configuration.api_key['api-key'] = os.getenv("BREVO_API_KEY")  # Set this in Railway!
+
+    api_instance = sib_api_v3_sdk.TransactionalEmailsApi(sib_api_v3_sdk.ApiClient(configuration))
+
+    first_name = get_user_first_name(user_email)
+    tenders_html = build_tenders_html(tenders)
+
+    # Replace TEMPLATE_ID with your real template ID from Brevo
+    template_id = 123456  # <--- CHANGE THIS to your actual Brevo template ID
+
+    send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(
+        to=[{"email": user_email, "name": first_name or "User"}],
+        template_id=template_id,
+        params={
+            "first_name": first_name,
+            "tenders_html": tenders_html
+        }
+    )
 
     try:
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-            server.starttls()
-            server.login(SMTP_USERNAME, SMTP_PASSWORD)
-            server.sendmail(FROM_EMAIL, [user_email], msg.as_string())
-        print(f"Sent email to {user_email}")
-    except Exception as e:
-        print(f"Error sending email to {user_email}: {e}")
+        api_response = api_instance.send_transac_email(send_smtp_email)
+        print("Brevo API response:", api_response)
+    except ApiException as e:
+        print("Exception when calling Brevo API: %s\n" % e)
