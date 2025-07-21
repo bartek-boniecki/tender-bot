@@ -7,3 +7,4 @@ apscheduler
 python-dotenv
 uvicorn
 sib-api-v3-sdk
+markdown
