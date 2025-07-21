@@ -22,24 +22,21 @@ def get_user_first_name(email):
         return ""
 
 def build_tenders_html(tenders, keyword, cpv):
-    # Compose the top sentence
     intro = f"We heard you are looking for tenders in the <b>{keyword}</b> area under <b>{cpv}</b> category – here you are:<br><br>"
     html = intro
     for tender in tenders:
         summary_md = tender.get('summary', '')
-        # Render markdown to HTML
         summary_html = markdown.markdown(summary_md, extensions=['extra', 'nl2br'])
         html += summary_html
         if tender.get('url'):
             html += f'<br><a href="{tender["url"]}" style="color:#1a3767;text-decoration:underline;">Tender link</a><br><br>'
-    # Wrap in a styled div
     return (
         "<div style='font-family:Segoe UI,Arial,sans-serif;font-size:16px;line-height:1.7;color:#212121;'>"
         f"{html}"
         "</div>"
     )
 
-def send_tender_email(user_email, tenders, keyword, cpv):
+def send_tender_email(user_email, tenders, keyword, cpv, first_name=None):
     print("[EMAILER] Preparing to send email...")
     api_key = os.getenv("BREVO_API_KEY")
     if not api_key:
@@ -50,11 +47,10 @@ def send_tender_email(user_email, tenders, keyword, cpv):
 
     api_instance = sib_api_v3_sdk.TransactionalEmailsApi(sib_api_v3_sdk.ApiClient(configuration))
 
-    first_name = get_user_first_name(user_email)
+    if not first_name:
+        first_name = get_user_first_name(user_email)
     tenders_html = build_tenders_html(tenders, keyword, cpv)
-
-    # Replace TEMPLATE_ID with your real template ID from Brevo
-    template_id = 1  # <--- YOUR Brevo template ID
+    template_id = 1  # <-- set your Brevo template ID
 
     send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(
         to=[{"email": user_email, "name": first_name or "User"}],
@@ -73,6 +69,3 @@ def send_tender_email(user_email, tenders, keyword, cpv):
         print("[EMAILER] Exception when calling Brevo API:", e)
     except Exception as e:
         print("[EMAILER] General error:", e)
-
-# Example call (after inserting to DB)
-# send_tender_email(user_email, tenders, keyword, cpv)
