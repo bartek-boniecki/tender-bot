@@ -4,15 +4,13 @@ from supabase import create_client
 def get_supabase_client():
     url = os.getenv("SUPABASE_URL")
     key = os.getenv("SUPABASE_KEY")
-    print(f"Supabase URL: {url}, Key length: {len(key) if key else 0}")
-    if not url or not key:
-        print("ERROR: Missing SUPABASE_URL or SUPABASE_KEY")
     return create_client(url, key)
 
 def get_or_create_user(first_name, email):
     supabase = get_supabase_client()
-    # Try to find user by email
+    email = email.strip().lower()
     try:
+        # Try to find user by email
         res = supabase.table("users").select("id, first_name").eq("email", email).execute()
         if res.data and len(res.data) > 0:
             user_id = res.data[0]['id']
@@ -22,14 +20,22 @@ def get_or_create_user(first_name, email):
             print(f"Found existing user_id for email {email}: {user_id}")
             return user_id
         else:
-            # If not found, insert new user
-            insert_res = supabase.table("users").insert({"email": email, "first_name": first_name}).execute()
-            if insert_res.data and len(insert_res.data) > 0:
-                user_id = insert_res.data[0]['id']
-                print(f"Created new user_id for email {email}: {user_id}")
-                return user_id
-            else:
-                print(f"Failed to create user for email {email}")
+            # If not found, try to insert new user
+            try:
+                insert_res = supabase.table("users").insert({"email": email, "first_name": first_name}).execute()
+                if insert_res.data and len(insert_res.data) > 0:
+                    user_id = insert_res.data[0]['id']
+                    print(f"Created new user_id for email {email}: {user_id}")
+                    return user_id
+                else:
+                    print(f"Failed to create user for email {email}")
+                    return None
+            except Exception as insert_ex:
+                # Possible unique violation due to race condition: try to fetch again
+                print(f"Insert failed, possibly due to duplicate: {insert_ex}")
+                res2 = supabase.table("users").select("id").eq("email", email).execute()
+                if res2.data and len(res2.data) > 0:
+                    return res2.data[0]['id']
                 return None
     except Exception as e:
         print(f"Error in get_or_create_user: {e}")

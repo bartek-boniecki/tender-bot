@@ -2,7 +2,7 @@ import os
 from supabase import create_client
 import sib_api_v3_sdk
 from sib_api_v3_sdk.rest import ApiException
-import re
+import markdown  # <--- Add this!
 
 def get_supabase_client():
     url = os.getenv("SUPABASE_URL")
@@ -21,45 +21,36 @@ def get_user_first_name(email):
         print(f"Error fetching first name: {e}")
         return ""
 
-def summary_to_html(summary):
-    # Replace markdown-style **bold** with real <b>
-    html = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', summary)
-    # Replace lines starting with - (dash+space) to <li>
-    html = re.sub(r'^\s*-\s+', r'<li>', html, flags=re.MULTILINE)
-    # Wrap bullet points in <ul>
-    if '<li>' in html:
-        html = re.sub(r'(<li>.*?)(?=\n[^-]|$)', r'<ul>\1</ul>', html, flags=re.DOTALL)
-    # Replace line breaks with <br> for spacing
-    html = html.replace('\n', '<br>')
-    return html
-
-def build_tenders_html(tenders):
+def build_tenders_html(tenders, keyword, cpv):
+    intro = f"We heard you are looking for tenders in the <b>{keyword}</b> area under <b>{cpv}</b> category - here you are:<br><br>"
     html = ""
     for tender in tenders:
         summary = tender.get('summary', '')
-        html += summary_to_html(summary)
-        # Add a link at the end (always clickable)
+        # Use markdown conversion!
+        summary_html = markdown.markdown(summary, extensions=['extra'])
+        # Add link at the end
         if tender.get('url'):
-            html += f'<br><a href="{tender["url"]}" style="color:#1a3767;text-decoration:underline;">Tender link</a><br><br>'
+            summary_html += f'<br><a href="{tender["url"]}" style="color:#1a3767;text-decoration:underline;">Tender link</a><br><br>'
+        html += summary_html
     # Wrap everything in a styled <div>
     return (
         "<div style='font-family:Segoe UI,Arial,sans-serif;font-size:16px;line-height:1.7;color:#212121;'>"
-        f"{html}"
+        f"{intro}{html}"
         "</div>"
     )
 
-def send_tender_email(user_email, tenders):
+def send_tender_email(user_email, tenders, keyword, cpv):
     # Use Brevo API to send email
     configuration = sib_api_v3_sdk.Configuration()
-    configuration.api_key['api-key'] = os.getenv("BREVO_API_KEY")  # Set this in Railway!
+    configuration.api_key['api-key'] = os.getenv("BREVO_API_KEY")
 
     api_instance = sib_api_v3_sdk.TransactionalEmailsApi(sib_api_v3_sdk.ApiClient(configuration))
 
     first_name = get_user_first_name(user_email)
-    tenders_html = build_tenders_html(tenders)
+    tenders_html = build_tenders_html(tenders, keyword, cpv)
 
     # Replace TEMPLATE_ID with your real template ID from Brevo
-    template_id = 1  # <--- CHANGE THIS to your actual Brevo template ID
+    template_id = 1  # <--- CHANGE THIS
 
     send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(
         to=[{"email": user_email, "name": first_name or "User"}],
@@ -75,3 +66,4 @@ def send_tender_email(user_email, tenders):
         print("Brevo API response:", api_response)
     except ApiException as e:
         print("Exception when calling Brevo API: %s\n" % e)
+
