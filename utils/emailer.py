@@ -1,8 +1,8 @@
 import os
+import markdown
 from supabase import create_client
 import sib_api_v3_sdk
 from sib_api_v3_sdk.rest import ApiException
-import markdown  # <--- Add this!
 
 def get_supabase_client():
     url = os.getenv("SUPABASE_URL")
@@ -22,27 +22,31 @@ def get_user_first_name(email):
         return ""
 
 def build_tenders_html(tenders, keyword, cpv):
-    intro = f"We heard you are looking for tenders in the <b>{keyword}</b> area under <b>{cpv}</b> category - here you are:<br><br>"
-    html = ""
+    # Compose the top sentence
+    intro = f"We heard you are looking for tenders in the <b>{keyword}</b> area under <b>{cpv}</b> category – here you are:<br><br>"
+    html = intro
     for tender in tenders:
-        summary = tender.get('summary', '')
-        # Use markdown conversion!
-        summary_html = markdown.markdown(summary, extensions=['extra'])
-        # Add link at the end
-        if tender.get('url'):
-            summary_html += f'<br><a href="{tender["url"]}" style="color:#1a3767;text-decoration:underline;">Tender link</a><br><br>'
+        summary_md = tender.get('summary', '')
+        # Render markdown to HTML
+        summary_html = markdown.markdown(summary_md, extensions=['extra', 'nl2br'])
         html += summary_html
-    # Wrap everything in a styled <div>
+        if tender.get('url'):
+            html += f'<br><a href="{tender["url"]}" style="color:#1a3767;text-decoration:underline;">Tender link</a><br><br>'
+    # Wrap in a styled div
     return (
         "<div style='font-family:Segoe UI,Arial,sans-serif;font-size:16px;line-height:1.7;color:#212121;'>"
-        f"{intro}{html}"
+        f"{html}"
         "</div>"
     )
 
 def send_tender_email(user_email, tenders, keyword, cpv):
-    # Use Brevo API to send email
+    print("[EMAILER] Preparing to send email...")
+    api_key = os.getenv("BREVO_API_KEY")
+    if not api_key:
+        print("ERROR: BREVO_API_KEY not set in environment variables!")
+        raise Exception("BREVO_API_KEY missing")
     configuration = sib_api_v3_sdk.Configuration()
-    configuration.api_key['api-key'] = os.getenv("BREVO_API_KEY")
+    configuration.api_key['api-key'] = api_key
 
     api_instance = sib_api_v3_sdk.TransactionalEmailsApi(sib_api_v3_sdk.ApiClient(configuration))
 
@@ -50,7 +54,7 @@ def send_tender_email(user_email, tenders, keyword, cpv):
     tenders_html = build_tenders_html(tenders, keyword, cpv)
 
     # Replace TEMPLATE_ID with your real template ID from Brevo
-    template_id = 1  # <--- CHANGE THIS
+    template_id = 1  # <--- YOUR Brevo template ID
 
     send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(
         to=[{"email": user_email, "name": first_name or "User"}],
@@ -62,8 +66,13 @@ def send_tender_email(user_email, tenders, keyword, cpv):
     )
 
     try:
+        print("[EMAILER] Sending email to", user_email)
         api_response = api_instance.send_transac_email(send_smtp_email)
-        print("Brevo API response:", api_response)
+        print("[EMAILER] Brevo API response:", api_response)
     except ApiException as e:
-        print("Exception when calling Brevo API: %s\n" % e)
+        print("[EMAILER] Exception when calling Brevo API:", e)
+    except Exception as e:
+        print("[EMAILER] General error:", e)
 
+# Example call (after inserting to DB)
+# send_tender_email(user_email, tenders, keyword, cpv)
