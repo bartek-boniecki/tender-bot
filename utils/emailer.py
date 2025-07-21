@@ -59,7 +59,7 @@ def send_tender_email(user_email, tenders):
     tenders_html = build_tenders_html(tenders)
 
     # Replace TEMPLATE_ID with your real template ID from Brevo
-    template_id = 123456  # <--- CHANGE THIS to your actual Brevo template ID
+    template_id = 1  # <--- CHANGE THIS to your actual Brevo template ID
 
     send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(
         to=[{"email": user_email, "name": first_name or "User"}],
