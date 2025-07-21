@@ -34,8 +34,8 @@ async def typeform_webhook(data: WebhookRequest, background_tasks: BackgroundTas
     answers = data.form_response.answers
     first_name = answers[0].text or ""
     user_email = answers[1].email or ""
-    cpv = answers[2].text or ""
     keyword = answers[3].text or ""
+    cpv = answers[2].text or ""
     print("Parsed values:", first_name, user_email, cpv, keyword)
 
     background_tasks.add_task(process_pipeline, first_name, user_email, cpv, keyword)
