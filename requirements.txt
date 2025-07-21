@@ -1,0 +1,8 @@
+openai>=1.0.0
+playwright
+beautifulsoup4
+fastapi
+supabase
+apscheduler
+python-dotenv
+uvicorn
