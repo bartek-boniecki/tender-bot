@@ -10,14 +10,13 @@ async def fillout_webhook(request: Request, background_tasks: BackgroundTasks):
     data = await request.json()
     print("Webhook data:", data)
 
-    # Adapt field names as needed to match your Fillout setup.
+    # Parse Fillout webhook fields
     answers = {a['field']['id']: (a.get('email') or a.get('text')) for a in data['answers']}
     first_name = answers.get('name', '')
     user_email = answers.get('email', '')
     keyword = answers.get('keyword', '')
     cpv = answers.get('cpv', '')
 
-    # Do basic validation
     if not all([first_name, user_email, keyword, cpv]):
         return {"status": "error", "reason": "Missing required fields"}
 

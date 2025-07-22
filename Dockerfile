@@ -1,15 +1,13 @@
-FROM mcr.microsoft.com/playwright/python:v1.44.0-jammy
+FROM python:3.11-slim
 
 WORKDIR /app
 
 COPY . .
 
-RUN pip install --upgrade pip
-RUN pip install -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Force re-install the Playwright browsers after pip installs
-RUN playwright install chromium
+# Install Playwright browsers (needed for scraping)
+RUN python -m playwright install
 
-EXPOSE 8080
-
-CMD ["sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
