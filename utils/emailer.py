@@ -1,49 +1,65 @@
+# utils/emailer.py
+
 import os
-import sib_api_v3_sdk
-from sib_api_v3_sdk.rest import ApiException
+import logging
+import httpx
 
-def format_tenders_html(tenders):
-    if not tenders:
-        return "<p>No new tenders matching your criteria were found this week.</p>"
+logger = logging.getLogger("tender-bot.emailer")
+logging.basicConfig(level=logging.INFO)
 
-    cards = []
-    for t in tenders:
-        summary = t.get("summary", "")
-        url     = t.get("url", "#")
-        cards.append(f"""
-        <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;border:1px solid #e0e0e0;border-radius:10px;background:#fafbfc;">
-          <tr><td style="padding:18px 20px 14px 20px;">
-            <div style="font-size:18px;font-weight:bold;margin-bottom:8px;">Tender Opportunity</div>
-            <div style="margin-bottom:10px;">{summary}</div>
-            <a href="{url}" style="display:inline-block;margin-top:8px;font-size:15px;color:#ffffff;background:#176ae5;border-radius:6px;padding:8px 16px;text-decoration:none;">View Tender</a>
-          </td></tr>
-        </table>
-        """)
-    return "\n".join(cards)
+def send_tender_email(
+    to_email: str,
+    tenders: list[dict],
+    keyword: str,
+    cpv: str,
+    first_name: str
+):
+    """
+    Sends a transactional email using a pre‐configured Brevo template.
+    All template defaults (sender, subject, body) are taken from Brevo.
+    Expects these ENV vars:
+      - BREVO_API_KEY
+      - BREVO_TEMPLATE_ID
+    And assumes your template defines placeholders:
+      {{ firstName }}, {{ cpv }}, {{ keyword }}, and {{ tenders }} 
+      (where tenders is a list of {url,summary} objects).
+    """
 
-def send_tender_email(user_email, tenders, keyword, cpv, first_name):
-    tenders_html = format_tenders_html(tenders)
+    api_key     = os.getenv("BREVO_API_KEY")
+    template_id = os.getenv("BREVO_TEMPLATE_ID")
 
-    configuration = sib_api_v3_sdk.Configuration()
-    configuration.api_key['api-key'] = os.getenv("BREVO_API_KEY")
-    api_instance = sib_api_v3_sdk.TransactionalEmailsApi(sib_api_v3_sdk.ApiClient(configuration))
+    if not api_key or not template_id:
+        raise RuntimeError("BREVO_API_KEY and BREVO_TEMPLATE_ID must be set")
 
-    template_id = int(os.getenv("BREVO_TEMPLATE_ID", "1"))
-    sender_email = os.getenv("SENDER_EMAIL", "tenderbot@otono.me")
+    # Build the params payload for your template
+    params = {
+        "firstName": first_name,
+        "cpv": cpv,
+        "keyword": keyword,
+        "tenders": tenders
+    }
 
-    send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(
-        to=[{"email": user_email, "name": first_name or "User"}],
-        template_id=template_id,
-        params={
-            "first_name": first_name or "User",
-            "keyword": keyword,
-            "cpv": cpv,
-            "tenders_html": tenders_html
-        },
-        sender={"name": "TenderBot", "email": sender_email}
-    )
+    payload = {
+        "to": [{"email": to_email, "name": first_name}],
+        "templateId": int(template_id),
+        "params": params
+    }
+
+    headers = {
+        "api-key": api_key,
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+
+    url = "https://api.brevo.com/v3/smtp/email"
 
     try:
-        api_instance.send_transac_email(send_smtp_email)
-    except ApiException as e:
-        print(f"Brevo email exception: {e}")
+        resp = httpx.post(url, json=payload, headers=headers, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        msg_id = data.get("messageId", "<unknown>")
+        logger.info(f"Brevo accepted template email id={msg_id} for {to_email}")
+        return data
+    except Exception as e:
+        logger.exception(f"Failed to send templated email to {to_email}")
+        raise
