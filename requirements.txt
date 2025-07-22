@@ -7,3 +7,6 @@ python-dotenv
 uvicorn
 sib-api-v3-sdk
 markdown
+backoff>=1.2.0
+apscheduler>=3.10.1
+httpx>=0.24.0
