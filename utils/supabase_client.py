@@ -6,17 +6,24 @@ def get_supabase_client():
     key = os.getenv("SUPABASE_KEY")
     return create_client(url, key)
 
-def get_or_create_user(first_name, email):
+def get_or_create_user(first_name, email, keyword, cpv):
     supabase = get_supabase_client()
     try:
-        res = supabase.table("users").select("id, first_name").eq("email", email).execute()
+        res = supabase.table("users").select("id, first_name, keyword, cpv").eq("email", email).execute()
         if res.data and len(res.data) > 0:
             user_id = res.data[0]['id']
+            update_data = {}
             if not res.data[0].get("first_name") or res.data[0].get("first_name") != first_name:
-                supabase.table("users").update({"first_name": first_name}).eq("id", user_id).execute()
+                update_data["first_name"] = first_name
+            if not res.data[0].get("keyword") or res.data[0].get("keyword") != keyword:
+                update_data["keyword"] = keyword
+            if not res.data[0].get("cpv") or res.data[0].get("cpv") != cpv:
+                update_data["cpv"] = cpv
+            if update_data:
+                supabase.table("users").update(update_data).eq("id", user_id).execute()
             return user_id
         else:
-            insert_res = supabase.table("users").insert({"email": email, "first_name": first_name}).execute()
+            insert_res = supabase.table("users").insert({"email": email, "first_name": first_name, "keyword": keyword, "cpv": cpv}).execute()
             if insert_res.data and len(insert_res.data) > 0:
                 return insert_res.data[0]['id']
     except Exception as e:
@@ -25,7 +32,7 @@ def get_or_create_user(first_name, email):
 
 def save_tender_data(first_name, email, cpv, keyword, tenders):
     supabase = get_supabase_client()
-    user_id = get_or_create_user(first_name, email)
+    user_id = get_or_create_user(first_name, email, keyword, cpv)
     if not user_id:
         print("User creation failed")
         return None
@@ -43,7 +50,11 @@ def save_tender_data(first_name, email, cpv, keyword, tenders):
             print(f"Error saving tender: {e}")
     return user_id
 
-# Example function for fetching pending jobs, adapt as you need
-def get_pending_weekly_emails():
-    # Replace with logic to query users needing an email and their tenders
-    return []
+def get_all_users():
+    supabase = get_supabase_client()
+    try:
+        res = supabase.table("users").select("id, first_name, email, keyword, cpv").execute()
+        return res.data if res.data else []
+    except Exception as e:
+        print(f"Error fetching users: {e}")
+        return []

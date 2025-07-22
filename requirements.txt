@@ -3,7 +3,6 @@ playwright
 beautifulsoup4
 fastapi
 supabase
-apscheduler
 python-dotenv
 uvicorn
 sib-api-v3-sdk

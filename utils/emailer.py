@@ -1,13 +1,8 @@
 import os
 import markdown
-from supabase import create_client
 import sib_api_v3_sdk
 from sib_api_v3_sdk.rest import ApiException
-
-def get_supabase_client():
-    url = os.getenv("SUPABASE_URL")
-    key = os.getenv("SUPABASE_KEY")
-    return create_client(url, key)
+from utils.supabase_client import get_supabase_client
 
 def get_user_first_name(email):
     supabase = get_supabase_client()

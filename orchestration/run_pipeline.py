@@ -8,7 +8,7 @@ from analysis.openai_summary import summarize_eligibility
 async def run_pipeline_with_params(cpv, keyword, pages=1):
     urls = await fetch_notice_urls(cpv, keyword, pages=pages)
     # Limit to 20 tenders maximum
-    urls = urls[:20]
+    urls = urls[:15]
     tenders = []
     for url in urls:
         html = await get_notice_html(url)
