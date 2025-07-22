@@ -15,49 +15,41 @@ def send_tender_email(
     first_name: str
 ):
     """
-    Sends a transactional email using a Brevo template,
-    passing tenders as a single HTML snippet in `tendersHtml`.
-
-    ENV vars required:
-      - BREVO_API_KEY
-      - BREVO_TEMPLATE_ID
-    Your Brevo template should include {{{tendersHtml}}} to render the list.
+    Calls Brevo's /v3/smtp/email endpoint using a template.
+    Your Brevo template must use {{{ params.tenders_html }}} to render the list.
     """
 
     api_key     = os.getenv("BREVO_API_KEY")
     template_id = os.getenv("BREVO_TEMPLATE_ID")
-
     if not api_key or not template_id:
         raise RuntimeError("BREVO_API_KEY and BREVO_TEMPLATE_ID must be set")
 
-    # Build HTML list of tenders
+    # 1) Build the raw HTML list
     if tenders:
-        list_items = "".join(
+        items = "".join(
             f"<li><a href=\"{t['url']}\">{t['url']}</a><p>{t['summary']}</p></li>"
             for t in tenders
         )
-        tenders_html = f"<ul>{list_items}</ul>"
+        tenders_html = f"<ul>{items}</ul>"
     else:
         tenders_html = "<p>No tenders found.</p>"
 
-    # Parameters sent into your Brevo template
-    params = {
-        "firstName": first_name,
-        "cpv": cpv,
-        "keyword": keyword,
-        "tendersHtml": tenders_html
-    }
-
+    # 2) Prepare the payload for the template
     payload = {
-        "to": [{"email": to_email, "name": first_name}],
+        "to": [{ "email": to_email, "name": first_name }],
         "templateId": int(template_id),
-        "params": params
+        "params": {
+            "first_name": first_name,
+            "cpv": cpv,
+            "keyword": keyword,
+            "tenders_html": tenders_html
+        }
     }
 
     headers = {
         "api-key": api_key,
         "Content-Type": "application/json",
-        "Accept": "application/json"
+        "Accept": "application/json",
     }
 
     url = "https://api.brevo.com/v3/smtp/email"
@@ -66,8 +58,7 @@ def send_tender_email(
         resp = httpx.post(url, json=payload, headers=headers, timeout=10)
         resp.raise_for_status()
         data = resp.json()
-        msg_id = data.get("messageId", "<unknown>")
-        logger.info(f"Brevo accepted template email id={msg_id} for {to_email}")
+        logger.info(f"Brevo accepted template email id={data.get('messageId')} for {to_email}")
         return data
     except Exception:
         logger.exception(f"Failed to send templated email to {to_email}")
