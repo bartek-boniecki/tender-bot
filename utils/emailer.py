@@ -29,7 +29,7 @@ def send_tender_email(user_email, tenders, keyword, cpv, first_name):
     api_instance = sib_api_v3_sdk.TransactionalEmailsApi(sib_api_v3_sdk.ApiClient(configuration))
 
     template_id = int(os.getenv("BREVO_TEMPLATE_ID", "1"))
-    sender_email = os.getenv("SENDER_EMAIL", "noreply@tenderletter.com")
+    sender_email = os.getenv("SENDER_EMAIL", "tenderbot@otono.me")
 
     send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(
         to=[{"email": user_email, "name": first_name or "User"}],
@@ -40,7 +40,7 @@ def send_tender_email(user_email, tenders, keyword, cpv, first_name):
             "cpv": cpv,
             "tenders_html": tenders_html
         },
-        sender={"name": "TenderLetter", "email": sender_email}
+        sender={"name": "TenderBot", "email": sender_email}
     )
 
     try:
