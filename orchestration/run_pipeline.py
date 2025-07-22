@@ -12,16 +12,12 @@ async def _run_pipeline(cpv: str, keyword: str, max_items: int = 20):
     3) Summarizes eligibility & award criteria via GPT
     Returns a list of dicts: [{"url": ..., "summary": ...}, ...]
     """
-    # Step 1: find matching tenders
     urls = await search_tenders(cpv, keyword)
     results = []
-
-    # Step 2 & 3: for each URL, scrape + summarize
     for url in urls[:max_items]:
         html = await get_html(url)
         summary = await summarize_criteria(html)
         results.append({"url": url, "summary": summary})
-
     return results
 
 def run_pipeline_with_params(cpv: str, keyword: str):
