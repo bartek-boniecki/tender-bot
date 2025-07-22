@@ -36,7 +36,7 @@ async def fillout_webhook(request: Request, background_tasks: BackgroundTasks):
 
     try:
         # 1) Scrape & summarize
-        tenders = run_pipeline_with_params(cpv, keyword)
+        tenders = await run_pipeline_with_params(cpv, keyword)
 
         # 2) Persist & filter to only brand‑new results
         new_tenders = save_tender_data(first_name, user_email, cpv, keyword, tenders)
