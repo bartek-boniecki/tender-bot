@@ -1,6 +1,10 @@
+import os
+from dotenv import load_dotenv
+
+load_dotenv(override=True)
+
 from openai import OpenAI
 from bs4 import BeautifulSoup
-import os
 
 def summarize_eligibility(html: str) -> str:
     try:

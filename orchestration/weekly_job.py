@@ -1,3 +1,7 @@
+import os
+from dotenv import load_dotenv
+load_dotenv(override=True)
+
 from utils.supabase_client import get_all_users, save_tender_data
 from orchestration.run_pipeline import run_pipeline_with_params
 from utils.emailer import send_tender_email

@@ -1,0 +1,16 @@
+POST http://localhost:8000/fillout-webhook
+Content-Type: application/json
+
+{
+  "formId": "test",
+  "formName": "Subscribe to TenderLetter",
+  "submission": {
+    "submissionId": "test-id",
+    "questions": [
+      {"id": "5mKT", "name": "What's your name", "type": "ShortAnswer", "value": "Bartek"},
+      {"id": "vijH34vJvrxwVf9vWAuDUq", "name": "What is your email?", "type": "EmailInput", "value": "bartoszkboniecki@gmail.com"},
+      {"id": "koho", "name": "Provide one keyword we'll use to look up tenders for you", "type": "ShortAnswer", "value": "consulting"},
+      {"id": "fAbU", "name": "Provide one CPV code to narrow down our search", "type": "Dropdown", "value": "79000000 Business services: law; marketing; consulting; recruitment,"}
+    ]
+  }
+}
