@@ -15,14 +15,13 @@ def send_tender_email(
     first_name: str
 ):
     """
-    Sends a transactional email using a pre‐configured Brevo template.
-    All template defaults (sender, subject, body) are taken from Brevo.
-    Expects these ENV vars:
+    Sends a transactional email using a Brevo template,
+    passing tenders as a single HTML snippet in `tendersHtml`.
+
+    ENV vars required:
       - BREVO_API_KEY
       - BREVO_TEMPLATE_ID
-    And assumes your template defines placeholders:
-      {{ firstName }}, {{ cpv }}, {{ keyword }}, and {{ tenders }} 
-      (where tenders is a list of {url,summary} objects).
+    Your Brevo template should include {{{tendersHtml}}} to render the list.
     """
 
     api_key     = os.getenv("BREVO_API_KEY")
@@ -31,12 +30,22 @@ def send_tender_email(
     if not api_key or not template_id:
         raise RuntimeError("BREVO_API_KEY and BREVO_TEMPLATE_ID must be set")
 
-    # Build the params payload for your template
+    # Build HTML list of tenders
+    if tenders:
+        list_items = "".join(
+            f"<li><a href=\"{t['url']}\">{t['url']}</a><p>{t['summary']}</p></li>"
+            for t in tenders
+        )
+        tenders_html = f"<ul>{list_items}</ul>"
+    else:
+        tenders_html = "<p>No tenders found.</p>"
+
+    # Parameters sent into your Brevo template
     params = {
         "firstName": first_name,
         "cpv": cpv,
         "keyword": keyword,
-        "tenders": tenders
+        "tendersHtml": tenders_html
     }
 
     payload = {
@@ -60,6 +69,6 @@ def send_tender_email(
         msg_id = data.get("messageId", "<unknown>")
         logger.info(f"Brevo accepted template email id={msg_id} for {to_email}")
         return data
-    except Exception as e:
+    except Exception:
         logger.exception(f"Failed to send templated email to {to_email}")
         raise
