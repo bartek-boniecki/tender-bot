@@ -10,7 +10,6 @@ def format_tenders_html(tenders):
     for t in tenders:
         summary = t.get("summary") or ""
         url = t.get("url") or "#"
-        # Each tender is rendered as a visually separated box (table/card)
         card = f"""
         <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;border:1px solid #e0e0e0;border-radius:10px;background:#fafbfc;">
           <tr>
@@ -32,31 +31,19 @@ def send_tender_email(user_email, tenders, keyword, cpv, first_name):
     configuration.api_key['api-key'] = os.getenv("BREVO_API_KEY")
     api_instance = sib_api_v3_sdk.TransactionalEmailsApi(sib_api_v3_sdk.ApiClient(configuration))
 
-    # Email subject and body
-    subject = f"Your Weekly Tender Matches: {keyword} ({cpv})"
-    html_content = f"""
-    <div style="font-family:Segoe UI,Arial,sans-serif;font-size:16px;line-height:1.7;color:#212121;max-width:700px;margin:0 auto;">
-      <div style="background:#176ae5;padding:18px 20px 10px 20px;border-radius:10px 10px 0 0;">
-        <span style="font-size:22px;font-weight:bold;color:#fff;">TenderLetter</span>
-      </div>
-      <div style="padding:24px 20px 30px 20px;background:#fff;border-radius:0 0 10px 10px;">
-        <p>Hi <strong>{first_name}</strong>,</p>
-        <p>Here are this week's public tenders for <b>{keyword}</b> (<b>{cpv}</b>):</p>
-        {tenders_html}
-        <hr style="margin:28px 0 18px 0; border:0; border-top:1px solid #e0e0e0;">
-        <div style="font-size:13px;color:#889;">
-          You are receiving this because you subscribed for weekly public tenders on TenderLetter.<br>
-          <span style="color:#bbb;">{user_email}</span>
-        </div>
-      </div>
-    </div>
-    """
+    template_id = 1  # <-- Replace with your actual Brevo template ID
 
-    # If you use a Brevo template, you can pass html_content as a param
+    params = {
+        "first_name": first_name or "User",
+        "keyword": keyword,
+        "cpv": cpv,
+        "tenders_html": tenders_html
+    }
+
     send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(
         to=[{"email": user_email, "name": first_name or "User"}],
-        subject=subject,
-        html_content=html_content,
+        template_id=template_id,
+        params=params,
         sender={"name": "TenderLetter", "email": "noreply@tenderletter.com"}
     )
 
