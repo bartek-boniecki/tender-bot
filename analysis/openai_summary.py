@@ -37,8 +37,8 @@ async def summarize_subject_matter(html_content: str) -> str:
         soup = BeautifulSoup(html_content, "html.parser")
         text = "\n".join(ln.strip() for ln in soup.get_text(separator="\n").splitlines() if ln.strip())[:MAX_CHARS]
         system = (
-            "You are an EU procurement expert. Translate any non‑English text, then write "
-            "a single concise (≤200 chars) English summary of what work the contractor will perform."
+            "You are an EU procurement expert. Translate any non‑English text, then write a single concise (≤200 chars) English summary of what work the contractor will perform. "
+            "Don't indicate whether the text was translated and don't use asterisks. "
         )
         resp = await asyncio.to_thread(
             openai.chat.completions.create,
@@ -59,7 +59,7 @@ async def summarize_eligibility(html_content: str) -> str:
         system = """
 You are an EU procurement specialist. Translate non‑English text, then extract every eligibility requirement and selection criteria for the bidder. 
 Briefly present all the criteria (no more than 500 characters in total). 
-If possible, group eligibility requirements or selection criteria by categories like formal, financial, technical experience, etc. 
+If possible, group eligibility requirements or selection criteria by categories like formal, financial, technical, experience, etc. 
 If a category has >1 item, use:
   <h3>Category</h3><ul><li>…</li></ul>
 If only one, just:
