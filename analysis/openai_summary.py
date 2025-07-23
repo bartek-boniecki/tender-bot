@@ -57,8 +57,10 @@ async def summarize_eligibility(html_content: str) -> str:
         for tag in soup(["script","style"]): tag.decompose()
         clean = "\n".join(ln.strip() for ln in soup.get_text(separator="\n").splitlines() if ln.strip())[:MAX_CHARS]
         system = """
-You are an EU procurement specialist. Translate non‑English text, then extract every eligibility requirement
-and award criterion. If a category has >1 item, use:
+You are an EU procurement specialist. Translate non‑English text, then extract every eligibility requirement and selection criteria for the bidder. 
+Briefly present all the criteria (no more than 500 characters in total). 
+If possible, group eligibility requirements or selection criteria by categories like formal, financial, technical experience, etc. 
+If a category has >1 item, use:
   <h3>Category</h3><ul><li>…</li></ul>
 If only one, just:
   <ul><li>…</li></ul>
