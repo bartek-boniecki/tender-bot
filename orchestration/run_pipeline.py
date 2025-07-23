@@ -5,7 +5,10 @@ import asyncio
 from bs4 import BeautifulSoup
 from ingestion.ted_playwright_search import fetch_notice_urls
 from ingestion.html_scraper import get_notice_html
-from analysis.openai_summary import summarize_eligibility, extract_descriptive_title
+from analysis.openai_summary import (
+    summarize_eligibility,
+    summarize_subject_matter
+)
 
 logger = logging.getLogger("tender-bot.pipeline")
 
@@ -15,11 +18,12 @@ async def run_pipeline_with_params(
     pages: int = 1
 ) -> list[dict]:
     """
-    1) Fetch TED URLs matching cpv+keyword
-    2) Scrape HTML for each
-    3) Extract a meaningful title via GPT (fallback to <h1>)
-    4) Summarize criteria in English via GPT
-    Returns list of {"title","url","summary"}.
+    1) Fetch TED URLs for cpv+keyword
+    2) Scrape each notice’s HTML
+    3) Extract the real <h1> as title
+    4) Generate a 200‑char subject summary (English)
+    5) Generate the HTML eligibility snippet (English)
+    Returns [{"title","subject_summary","url","summary"}, ...].
     """
     urls = await fetch_notice_urls(cpv, keyword, pages=pages)
     logger.info(f"Found {len(urls)} tender URLs for {cpv} + {keyword}")
@@ -32,16 +36,22 @@ async def run_pipeline_with_params(
                 logger.warning(f"Scrape failed for {url}, skipping")
                 continue
 
-            # 1) Extract descriptive title
-            title = await extract_descriptive_title(html)
+            # 3) Official title from <h1>
+            soup = BeautifulSoup(html, "html.parser")
+            h1 = soup.find("h1")
+            title = h1.get_text().strip() if h1 else "Tender Notice"
 
-            # 2) Summarize eligibility & award criteria in English
-            summary = await summarize_eligibility(html)
+            # 4) Concise subject summary
+            subject_summary = await summarize_subject_matter(html)
+
+            # 5) Eligibility & award criteria snippet
+            criteria_summary = await summarize_eligibility(html)
 
             tenders.append({
                 "title": title,
+                "subject_summary": subject_summary,
                 "url": url,
-                "summary": summary
+                "summary": criteria_summary
             })
 
         except Exception:
