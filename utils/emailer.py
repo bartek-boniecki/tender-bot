@@ -37,7 +37,8 @@ def send_tender_email(
     # Build the SendGrid Mail object with dynamic template data
     message = Mail(
         from_email=From(from_email, from_name),
-        to_emails=To(to_email, first_name=first_name),
+        # Pass the recipient name via `name=` (To does not accept `first_name=`)
+        to_emails=To(to_email, name=first_name),
     )
     message.template_id = template_id
     message.dynamic_template_data = {
