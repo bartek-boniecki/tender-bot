@@ -1,3 +1,5 @@
+# utils/emailer.py
+
 import os
 import logging
 from sendgrid import SendGridAPIClient
@@ -21,8 +23,8 @@ def send_tender_email(
       - FROM_EMAIL
       - FROM_NAME
 
-    Passes through:
-      - subject: used in the template's Subject field via {{subject}}
+    Passes:
+      - subject: used in the template’s Subject field via {{{subject}}}
       - first_name, cpv, keyword for greeting
       - tenders: array of {title, subject_matter, url, summary_html}
     """
@@ -37,18 +39,22 @@ def send_tender_email(
             "SENDGRID_API_KEY, SENDGRID_TEMPLATE_ID, and FROM_EMAIL must be set"
         )
 
-    # Build the dynamic subject line from the first tender's subject matter
-    subject = f"{tenders[0]['subject_matter']}" if tenders else f"Tenders for {keyword}/{cpv}"
+    # Build a dynamic subject using the first tender's subject_matter
+    if tenders and "subject_matter" in tenders[0]:
+        subject = tenders[0]["subject_matter"]
+    else:
+        subject = f"Tenders for {keyword}/{cpv}"
 
+    # Construct the SendGrid Mail object
     message = Mail(
         from_email=From(from_email, from_name),
         to_emails=To(to_email, name=first_name),
     )
 
-    # Tell SendGrid which Dynamic Template to use
+    # Specify the Dynamic Template
     message.template_id = template_id
 
-    # Note: Dynamic Templates ignore `message.subject`, so we supply it as a parameter
+    # Supply all dynamic data, including the subject placeholder
     message.dynamic_template_data = {
         "subject": subject,
         "first_name": first_name,
