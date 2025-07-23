@@ -8,30 +8,59 @@ from bs4 import BeautifulSoup
 openai.api_key = os.getenv("OPENAI_API_KEY")
 MAX_CHARS = 50000
 
+async def extract_descriptive_title(html_content: str) -> str:
+    """
+    Use GPT to craft a 5–8‑word English title capturing the substance of the tender,
+    ignoring numeric codes. Falls back to the page's <h1> if GPT fails.
+    """
+    # Fallback from <h1>
+    soup = BeautifulSoup(html_content, "html.parser")
+    h1 = soup.find("h1")
+    fallback = h1.get_text().strip() if h1 else "Tender Notice"
+
+    # Truncate input
+    text = soup.get_text(separator="\n")
+    text = "\n".join(line.strip() for line in text.splitlines() if line.strip())[:MAX_CHARS]
+
+    system = (
+        "You are an expert in EU public tenders. From the provided tender notice HTML, "
+        "generate a **5–8 word** English title that clearly conveys what the contract is for, "
+        "omitting any codes or reference numbers. Reply _only_ with the title."
+    )
+    messages = [{"role":"system","content":system}, {"role":"user","content":text}]
+
+    try:
+        resp = await asyncio.to_thread(
+            openai.chat.completions.create,
+            model="gpt-4o-mini",
+            messages=messages,
+            temperature=0.0,
+            max_tokens=16,
+        )
+        title = resp.choices[0].message.content.strip()
+        return title or fallback
+    except Exception:
+        return fallback
+
 async def summarize_subject_matter(html_content: str) -> str:
     """
-    Translate any non‑English parts into English, then produce a single concise
-    (≤200 chars) summary focusing on the specific tasks or services the contractor
-    will be required to perform.
+    Always in English: translate non-English parts, then give a ≤200‑char summary
+    of _what the contractor will do_ under this tender.
     """
-    # Extract visible text
     soup = BeautifulSoup(html_content, "html.parser")
-    for tag in soup(["script", "style"]):
-        tag.decompose()
-    raw = soup.get_text(separator="\n")
-    lines = [ln.strip() for ln in raw.splitlines() if ln.strip()]
-    clean_text = "\n".join(lines)[:MAX_CHARS]
+    for tag in soup(["script","style"]): tag.decompose()
+    text = soup.get_text(separator="\n")
+    clean = "\n".join(line.strip() for line in text.splitlines() if line.strip())
+    if len(clean) > MAX_CHARS: clean = clean[:MAX_CHARS]
 
-    system_prompt = (
-        "You are an expert in EU procurement. From the provided TED tender notice text, "
-        "first translate any non‑English passages into English. Then write a single "
-        "concise summary (max 200 characters) describing the exact tasks or services "
-        "the contractor will perform under this contract. Respond only with that text."
+    system = (
+        "You are an expert in EU procurement. The following is tender notice text "
+        "(may contain multiple languages). First translate any non‑English passages "
+        "into English. Then produce a single concise summary (≤200 characters) "
+        "explaining exactly what work the contractor will be required to perform. "
+        "Reply _only_ with that summary in English."
     )
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user",   "content": clean_text}
-    ]
+    messages = [{"role":"system","content":system}, {"role":"user","content":clean}]
 
     resp = await asyncio.to_thread(
         openai.chat.completions.create,
@@ -42,30 +71,26 @@ async def summarize_subject_matter(html_content: str) -> str:
     )
     return resp.choices[0].message.content.strip()
 
-
 async def summarize_eligibility(html_content: str) -> str:
     """
-    Translate into English if needed, then extract all eligibility & award criteria
-    and return an HTML snippet with <h3> headings and <ul><li> lists.
+    Always in English: translate non-English parts, then extract eligibility & award criteria
+    and output a clean HTML snippet with <h3> headings and <ul><li> lists.
     """
     soup = BeautifulSoup(html_content, "html.parser")
-    for tag in soup(["script", "style"]):
-        tag.decompose()
-    raw = soup.get_text(separator="\n")
-    clean_text = "\n".join(ln.strip() for ln in raw.splitlines() if ln.strip())[:MAX_CHARS]
+    for tag in soup(["script","style"]): tag.decompose()
+    text = soup.get_text(separator="\n")
+    clean = "\n".join(line.strip() for line in text.splitlines() if line.strip())
+    if len(clean) > MAX_CHARS: clean = clean[:MAX_CHARS]
 
-    system_prompt = (
-        "You are a procurement expert. From the given TED tender notice text, "
-        "translate non‑English passages into English, then extract each eligibility "
-        "requirement and award criterion. Output only an HTML snippet:\n"
-        "• Use <h3> per category (e.g., Financial Criteria).\n"
-        "• Under each, list <ul><li> items.\n"
-        "Do NOT include markdown or wrappers—only the inner snippet."
+    system = (
+        "You are an EU procurement specialist. The input is the full text of a tender notice. "
+        "First translate any non‑English passages into English, then extract _all_ eligibility "
+        "requirements and award criteria. Return _only_ an HTML fragment:\n"
+        "- Use <h3>Category Name</h3>\n"
+        "- Under each, wrap each item in <ul><li>…</li></ul>\n"
+        "No markdown, no asterisks, no <html>/<body> wrappers—pure inner snippet."
     )
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user",   "content": clean_text}
-    ]
+    messages = [{"role":"system","content":system}, {"role":"user","content":clean}]
 
     resp = await asyncio.to_thread(
         openai.chat.completions.create,
