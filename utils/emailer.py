@@ -2,7 +2,8 @@
 
 import os
 import logging
-import httpx
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail, From, To
 
 logger = logging.getLogger("tender-bot.emailer")
 logging.basicConfig(level=logging.INFO)
@@ -15,51 +16,45 @@ def send_tender_email(
     first_name: str
 ):
     """
-    Calls Brevo's /v3/smtp/email endpoint using a template.
-    Your Brevo template must use {{{ params.tenders_html }}} to render the list.
+    Sends a transactional email via SendGrid Dynamic Templates.
+    Expects these ENV vars:
+      - SENDGRID_API_KEY
+      - SENDGRID_TEMPLATE_ID
+      - FROM_EMAIL
+      - FROM_NAME
     """
 
-    api_key     = os.getenv("BREVO_API_KEY")
-    template_id = os.getenv("BREVO_TEMPLATE_ID")
-    if not api_key or not template_id:
-        raise RuntimeError("BREVO_API_KEY and BREVO_TEMPLATE_ID must be set")
+    api_key     = os.getenv("SENDGRID_API_KEY")
+    template_id = os.getenv("SENDGRID_TEMPLATE_ID")
+    from_email  = os.getenv("FROM_EMAIL")
+    from_name   = os.getenv("FROM_NAME", "")
 
-    # 1) Build the raw HTML list
-    if tenders:
-        items = "".join(
-            f"<li><a href=\"{t['url']}\">{t['url']}</a><p>{t['summary']}</p></li>"
-            for t in tenders
+    if not all([api_key, template_id, from_email]):
+        raise RuntimeError(
+            "SENDGRID_API_KEY, SENDGRID_TEMPLATE_ID, and FROM_EMAIL must be set"
         )
-        tenders_html = f"<ul>{items}</ul>"
-    else:
-        tenders_html = "<p>No tenders found.</p>"
 
-    # 2) Prepare the payload for the template
-    payload = {
-        "to": [{ "email": to_email, "name": first_name }],
-        "templateId": int(template_id),
-        "params": {
-            "first_name": first_name,
-            "cpv": cpv,
-            "keyword": keyword,
-            "tenders_html": tenders_html
-        }
+    # Build the SendGrid Mail object with dynamic template data
+    message = Mail(
+        from_email=From(from_email, from_name),
+        to_emails=To(to_email, first_name=first_name),
+    )
+    message.template_id = template_id
+    message.dynamic_template_data = {
+        "first_name": first_name,
+        "cpv": cpv,
+        "keyword": keyword,
+        "tenders": tenders
     }
-
-    headers = {
-        "api-key": api_key,
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    }
-
-    url = "https://api.brevo.com/v3/smtp/email"
 
     try:
-        resp = httpx.post(url, json=payload, headers=headers, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-        logger.info(f"Brevo accepted template email id={data.get('messageId')} for {to_email}")
-        return data
+        sg = SendGridAPIClient(api_key)
+        response = sg.send(message)
+        logger.info(
+            f"SendGrid accepted template {template_id} "
+            f"status_code={response.status_code} for {to_email}"
+        )
+        return response
     except Exception:
-        logger.exception(f"Failed to send templated email to {to_email}")
+        logger.exception(f"Failed to send email via SendGrid to {to_email}")
         raise
