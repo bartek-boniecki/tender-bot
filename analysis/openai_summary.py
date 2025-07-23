@@ -5,23 +5,52 @@ import openai
 import asyncio
 from bs4 import BeautifulSoup
 
-# Load your OpenAI key; Railway will inject OPENAI_API_KEY automatically.
+# Load your OpenAI key
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# Truncate raw text to stay under model context limits
+# Maximum raw text chars to send to the model
 MAX_CHARS = 50000
+
+async def extract_descriptive_title(html_content: str) -> str:
+    """
+    Calls GPT to produce a max‑10‑word descriptive title for the tender,
+    ignoring reference numbers. Falls back to the HTML <h1> if the call fails.
+    """
+    # First try to pull <h1> from the page
+    soup = BeautifulSoup(html_content, "html.parser")
+    h1 = soup.find("h1")
+    fallback = h1.get_text().strip() if h1 else "Tender Notice"
+
+    system_prompt = (
+        "You are an expert in EU procurement. "
+        "From the provided HTML of a TED tender notice, produce a single concise title "
+        "(no more than 10 words) that captures the substance of the tender. "
+        "Ignore any numeric reference codes. Respond only with the English title text."
+    )
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user",   "content": html_content[:MAX_CHARS]}
+    ]
+
+    try:
+        resp = await asyncio.to_thread(
+            openai.chat.completions.create,
+            model="gpt-4o-mini",
+            messages=messages,
+            temperature=0.0,
+            max_tokens=20,
+        )
+        title = resp.choices[0].message.content.strip()
+        return title or fallback
+    except Exception:
+        return fallback
 
 async def summarize_eligibility(html_content: str) -> str:
     """
-    1) Strips out scripts/styles and extracts visible text
-    2) Cleans, de‑dupes lines, and truncates to MAX_CHARS
-    3) Calls GPT-4O‑mini with instructions to output HTML:
-       - Use <h3> headings for each category (Financial, Technical, Award)
-       - Under each, use a <ul> with <li> items for criteria
-       - No markdown or asterisks—pure HTML snippet only
-    Returns that HTML snippet as a string.
+    Extract visible text, truncate, and call GPT to return an HTML snippet
+    of eligibility & award criteria—always in English.
     """
-    # 1) Extract visible text
+    # 1) Strip scripts/styles
     soup = BeautifulSoup(html_content, "html.parser")
     for tag in soup(["script", "style"]):
         tag.decompose()
@@ -31,28 +60,24 @@ async def summarize_eligibility(html_content: str) -> str:
     lines = [ln.strip() for ln in raw_text.splitlines() if ln.strip()]
     clean_text = "\n".join(lines)
     if len(clean_text) > MAX_CHARS:
-        print(
-            f"[openai_summary] Truncating input from {len(clean_text)} "
-            f"to {MAX_CHARS} chars to avoid overflow."
-        )
         clean_text = clean_text[:MAX_CHARS]
 
-    # 3) Prompt GPT to emit HTML
+    # 3) Prompt GPT for HTML snippet, forcing English translation if needed
     system_prompt = (
-        "You are an expert in EU procurement. "
-        "From the provided TED tender text, extract every eligibility requirement "
-        "and every award criterion, then output a single HTML snippet:\n\n"
-        "  • Use an <h3> heading for each category, e.g. <h3>Financial Criteria</h3>.\n"
-        "  • Under each heading, list each point as a <ul> with <li> items.\n"
-        "  • Do NOT include any markdown, asterisks, or other markup—only HTML.\n"
-        "  • Do NOT wrap in <html> or <body> tags; return only the inner snippet.\n"
+        "You are a procurement expert. The following is the text of a TED tender notice, "
+        "which may include non‑English passages. First **translate any non‑English parts** "
+        "into English. Then extract every eligibility requirement and award criterion, "
+        "and output a clean HTML snippet:\n"
+        "- Use <h3> for each category (e.g., Financial Criteria).\n"
+        "- Under each, use a <ul> of <li> items.\n"
+        "- Do NOT include markdown or asterisks—only HTML.\n"
+        "Return only the snippet (no <html>/<body> wrappers). Always respond in English."
     )
     messages = [
-        {"role": "system",  "content": system_prompt},
-        {"role": "user",    "content": clean_text}
+        {"role": "system", "content": system_prompt},
+        {"role": "user",   "content": clean_text}
     ]
 
-    # Call the sync .create via a thread to keep FastAPI responsive
     resp = await asyncio.to_thread(
         openai.chat.completions.create,
         model="gpt-4o-mini",
@@ -60,6 +85,4 @@ async def summarize_eligibility(html_content: str) -> str:
         temperature=0.0,
         max_tokens=500,
     )
-
-    html_snippet = resp.choices[0].message.content.strip()
-    return html_snippet
+    return resp.choices[0].message.content.strip()
