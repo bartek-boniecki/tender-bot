@@ -24,9 +24,9 @@ def send_tender_email(
       - FROM_NAME
 
     Passes:
-      - subject: used in the template’s Subject field via {{{subject}}}
+      - subject: static, generic weekly digest title
       - first_name, cpv, keyword for greeting
-      - tenders: array of {title, subject_matter, url, summary_html}
+      - tenders: array of {title, subject_matter, url, summary}
     """
 
     api_key     = os.getenv("SENDGRID_API_KEY")
@@ -39,38 +39,33 @@ def send_tender_email(
             "SENDGRID_API_KEY, SENDGRID_TEMPLATE_ID, and FROM_EMAIL must be set"
         )
 
-    # Build a dynamic subject using the first tender's subject_matter
-    if tenders and "subject_matter" in tenders[0]:
-        subject = tenders[0]["subject_matter"]
-    else:
-        subject = f"Tenders for {keyword}/{cpv}"
+    # 1) Use a clear, static weekly digest subject
+    email_subject = "EU TenderBot Weekly Summary"
 
-    # Construct the SendGrid Mail object
+    # 2) Construct the SendGrid Mail object
     message = Mail(
         from_email=From(from_email, from_name),
         to_emails=To(to_email, name=first_name),
     )
-
-    # Specify the Dynamic Template
     message.template_id = template_id
 
-    # Supply all dynamic data, including the subject placeholder
+    # 3) Supply all dynamic data, including the static subject
     message.dynamic_template_data = {
-        "subject": subject,
-        "first_name": first_name,
-        "cpv": cpv,
-        "keyword": keyword,
-        "tenders": tenders
+        "subject":      email_subject,
+        "first_name":   first_name,
+        "cpv":          cpv,
+        "keyword":      keyword,
+        "tenders":      tenders
     }
 
     try:
         sg = SendGridAPIClient(api_key)
-        response = sg.send(message)
+        resp = sg.send(message)
         logger.info(
             f"SendGrid accepted template {template_id} "
-            f"status_code={response.status_code} for {to_email}"
+            f"status_code={resp.status_code} for {to_email}"
         )
-        return response
+        return resp
     except Exception:
         logger.exception(f"Failed to send email via SendGrid to {to_email}")
         raise

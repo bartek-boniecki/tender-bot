@@ -2,6 +2,7 @@
 
 import logging
 import asyncio
+from bs4 import BeautifulSoup
 from ingestion.ted_playwright_search import fetch_notice_urls
 from ingestion.html_scraper import get_notice_html
 from analysis.openai_summary import (
@@ -13,6 +14,20 @@ from analysis.openai_summary import (
 logger = logging.getLogger("tender-bot.pipeline")
 
 async def run_pipeline_with_params(cpv: str, keyword: str, pages: int = 1) -> list[dict]:
+    """
+    1) Fetch TED URLs for cpv+keyword
+    2) Scrape each notice’s HTML
+    3) Extract a human‑friendly title via GPT (fallback to <h1>)
+    4) Generate a short (≤200 char) subject‑matter summary in English
+    5) Generate the HTML eligibility snippet in English
+    Returns a list of dicts:
+      {
+        "title": str,
+        "subject_matter": str,
+        "url": str,
+        "summary": str
+      }
+    """
     urls = await fetch_notice_urls(cpv, keyword, pages=pages)
     logger.info(f"Found {len(urls)} tender URLs for {cpv} + {keyword}")
 
@@ -24,18 +39,20 @@ async def run_pipeline_with_params(cpv: str, keyword: str, pages: int = 1) -> li
                 logger.warning(f"Scrape failed for {url}, skipping")
                 continue
 
-            # 1) GPT‑generated descriptive title
+            # 3) Descriptive title
             title = await extract_descriptive_title(html)
-            # 2) 200‑char subject matter summary
-            subject = await summarize_subject_matter(html)
-            # 3) HTML criteria snippet
-            criteria = await summarize_eligibility(html)
+
+            # 4) 200‑char subject summary (what work is required)
+            subject_matter = await summarize_subject_matter(html)
+
+            # 5) Eligibility & award criteria snippet
+            criteria_html = await summarize_eligibility(html)
 
             tenders.append({
                 "title": title,
-                "subject_matter": subject,
+                "subject_matter": subject_matter,
                 "url": url,
-                "summary_html": criteria
+                "summary": criteria_html
             })
 
         except Exception:
