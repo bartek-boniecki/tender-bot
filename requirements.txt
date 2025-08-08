@@ -1,0 +1,10 @@
+openai>=1.0.0
+playwright
+beautifulsoup4
+fastapi
+supabase
+python-dotenv
+uvicorn
+httpx
+sendgrid
+sib-api-v3-sdk
